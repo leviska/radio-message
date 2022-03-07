@@ -1,0 +1,15 @@
+[package]
+name = "radio-message"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "console"
+path = "src/console/main.rs"
+
+[[bin]]
+name = "visual"
+path = "src/visual/main.rs"
+
+[dependencies]
+macroquad = "0.3"
