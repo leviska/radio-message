@@ -1,3 +1,6 @@
+#[path = "../model/mod.rs"]
+mod model;
+
 use macroquad::prelude::*;
 
 #[macroquad::main("radio-message")]
