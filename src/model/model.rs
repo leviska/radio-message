@@ -1,25 +1,21 @@
 use super::*;
-use serde::{Deserialize, Serialize};
-use std::sync::Mutex;
+use rand::prelude::SliceRandom;
+use rand_distr::{Distribution, Uniform};
+use std::collections::HashMap;
 use tokio::sync::{mpsc, watch};
 
-#[derive(Serialize, Deserialize)]
-struct RequestMessage {
-    from: u32,
-    to: u32,
-    start: u32,
-    id: u32,
-}
-
-pub struct Model {
+pub struct Model<T> {
     size: u32,
     step: u32,
-    send: Vec<mpsc::UnboundedReceiver<MessageType>>,
-    recv: Vec<mpsc::UnboundedSender<Message>>,
+    send: mpsc::UnboundedReceiver<(u32, MessageType<T>)>,
+    recv: Vec<mpsc::UnboundedSender<Message<T>>>,
+    buffer: HashMap<u32, Vec<Message<T>>>,
     done: mpsc::Receiver<()>,
     rng: rand::rngs::ThreadRng,
     pub conn: ConnMap,
     ticks: watch::Sender<u32>,
+    messages: u32,
+    pub stats: Stats,
 }
 
 fn vec_chan<T>(
@@ -38,17 +34,17 @@ fn vec_chan<T>(
     (txs, rxs)
 }
 
-impl Model {
-    pub fn new(size: u32) -> (Model, Vec<Context>) {
+impl<T: Clone + core::fmt::Debug> Model<T> {
+    pub fn new(size: u32) -> (Model<T>, Vec<Context<T>>) {
         let rng = rand::thread_rng();
-        let send = vec_chan(size as usize);
         let recv = vec_chan(size as usize);
+        let send = mpsc::unbounded_channel();
         let ticks = watch::channel(0).0;
         let mut contexts = Vec::with_capacity(size as usize);
         let done = mpsc::channel(size as usize);
-        for (id, (send, recv)) in send.0.into_iter().zip(recv.1.into_iter()).enumerate() {
+        for (id, recv) in recv.1.into_iter().enumerate() {
             contexts.push(Context {
-                send,
+                send: send.0.clone(),
                 recv,
                 done: done.0.clone(),
                 tick: ticks.subscribe(),
@@ -60,44 +56,58 @@ impl Model {
             step: 0,
             send: send.1,
             recv: recv.0,
+            buffer: Default::default(),
             done: done.1,
             conn: Default::default(),
             rng,
-            ticks: ticks,
+            ticks,
+            stats: Default::default(),
+            messages: 0,
         };
         (model, contexts)
     }
 
-    fn send_message(&mut self, from: u32, to: u32, data: &String) {
-        if !self.conn.test(from, to, &mut self.rng) {
-            return;
-        }
-        log::info!("sending message from {} to {}: {}", from, to, data);
-        self.recv[to as usize]
-            .send(Message {
+    fn send_message(&mut self, from: u32, to: u32, data: &T) {
+        if let Some(delay) = self.conn.get(from, to, &mut self.rng) {
+            let at = self.step + delay;
+            log::debug!(
+                "staged message from {} to {} at {}: {:?}",
+                from,
+                to,
+                at,
+                data
+            );
+            self.buffer.entry(at).or_default().push(Message {
                 data: MessageType::Comm(data.clone()),
                 from,
                 to,
-            })
-            .unwrap();
+            });
+        }
     }
 
-    fn broadcast(&mut self, from: u32, data: &String) {
+    fn broadcast(&mut self, from: u32, data: &T) {
         for to in 0..self.size {
             self.send_message(from, to, data);
         }
     }
 
-    fn check_message(&self, sent: u32, data: String) -> Result<(), anyhow::Error> {
-        let message: RequestMessage = serde_json::from_str(&data)?;
-        if message.to != sent {
+    fn check_message(&mut self, sent: u32, data: RequestMessage) -> Result<(), anyhow::Error> {
+        if data.to != sent {
             anyhow::bail!("wrong destination id");
         }
-        log::info!("got message, took {} steps", self.step - message.start);
+        if !self.stats.delivered(data.id, self.step - data.start) {
+            log::info!("got duplicate message, id {}", data.id);
+        } else {
+            log::info!(
+                "got message, id {} took {} steps",
+                data.id,
+                self.step - data.start
+            );
+        }
         Ok(())
     }
 
-    fn process_message(&self, sent: u32, data: String) {
+    fn process_message(&mut self, sent: u32, data: RequestMessage) {
         if let Err(err) = self.check_message(sent, data) {
             log::error!("wrong message {}", err);
         }
@@ -109,36 +119,67 @@ impl Model {
         }
         self.step += 1;
         log::info!("step {}", self.step);
-        let mut messages = Vec::default();
-        for (id, rx) in self.send.iter_mut().enumerate() {
-            while let Ok(d) = rx.try_recv() {
-                messages.push((id, d));
+        while let Ok((id, data)) = self.send.try_recv() {
+            match data {
+                MessageType::Request(data) => self.process_message(id, data),
+                MessageType::Comm(data) => self.broadcast(id, &data),
             }
         }
-        for (id, data) in messages {
-            match data {
-                MessageType::Request(data) => self.process_message(id as u32, data),
-                MessageType::Comm(data) => self.broadcast(id as u32, &data),
+        if let Some(mut messages) = self.buffer.remove(&self.step) {
+            messages.shuffle(&mut self.rng);
+            for m in messages {
+                self.stats.on_message();
+                log::debug!("sending message from {} to {}: {:?}", m.from, m.to, m.data);
+                self.recv[m.to as usize].send(m).unwrap();
             }
         }
         self.ticks.send(self.step).unwrap();
     }
+
+    pub fn request_message(&mut self, from: u32, to: u32) {
+        let id = self.messages;
+        log::debug!("requested message id {} from {} to {}", id, from, to,);
+        self.recv[from as usize]
+            .send(Message {
+                data: MessageType::Request(RequestMessage {
+                    from,
+                    to,
+                    start: self.step,
+                    id: id,
+                }),
+                from,
+                to,
+            })
+            .unwrap();
+        self.stats.requested(id);
+        self.messages += 1
+    }
+
+    pub fn request_random(&mut self) {
+        let between = Uniform::from(0..self.size);
+        let from = between.sample(&mut self.rng);
+        let mut to = between.sample(&mut self.rng);
+        while to == from {
+            to = between.sample(&mut self.rng);
+        }
+        self.request_message(from, to);
+    }
 }
 
-pub struct Context {
-    send: mpsc::UnboundedSender<MessageType>,
-    recv: mpsc::UnboundedReceiver<Message>,
+pub struct Context<T> {
+    send: mpsc::UnboundedSender<(u32, MessageType<T>)>,
+    recv: mpsc::UnboundedReceiver<Message<T>>,
     tick: watch::Receiver<u32>,
     done: mpsc::Sender<()>,
     id: u32,
 }
 
-impl Context {
-    pub fn send(&self, data: MessageType) {
-        let _ = self.send.send(data);
+impl<T> Context<T> {
+    pub fn send(&self, data: MessageType<T>) {
+        let _ = self.send.send((self.id, data));
     }
 
-    async fn read_one(&mut self) -> Result<Option<Message>, ()> {
+    async fn read_one(&mut self) -> Result<Option<Message<T>>, ()> {
         if let Some(message) = self.try_read() {
             return Ok(Some(message));
         }
@@ -146,7 +187,7 @@ impl Context {
         return Ok(None);
     }
 
-    pub async fn read_for(&mut self, steps: u32) -> Result<Option<Message>, ()> {
+    pub async fn read_for(&mut self, steps: u32) -> Result<Option<Message<T>>, ()> {
         for _ in 0..steps {
             if let Some(m) = self.read_one().await? {
                 return Ok(Some(m));
@@ -155,7 +196,7 @@ impl Context {
         return Ok(None);
     }
 
-    pub async fn read(&mut self) -> Result<Message, ()> {
+    pub async fn read(&mut self) -> Result<Message<T>, ()> {
         loop {
             if let Some(m) = self.read_one().await? {
                 return Ok(m);
@@ -163,7 +204,7 @@ impl Context {
         }
     }
 
-    pub fn try_read(&mut self) -> Option<Message> {
+    pub fn try_read(&mut self) -> Option<Message<T>> {
         self.recv.try_recv().ok()
     }
 
