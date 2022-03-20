@@ -23,9 +23,10 @@ fn send_batch<T: Clone + core::fmt::Debug>(model: &mut Model<T>, size: u32) {
 async fn gossip() {
     env_logger::init();
 
-    let (mut model, contexts) = init_simple::<GossipMessage>(10);
+    const SIZE: u32 = 10;
 
-    send_batch(&mut model, 10);
+    let (mut model, contexts) = init_simple::<GossipMessage>(SIZE);
+    send_batch(&mut model, SIZE);
 
     for (id, ctx) in contexts.into_iter().enumerate() {
         tokio::spawn(async move {
@@ -33,10 +34,25 @@ async fn gossip() {
         });
     }
 
+    // basically works like a timeout
     for _ in 0..STEPS {
+        // if all messages that were requested are delivered, break
         if model.stats.all_delivered() {
             break;
         }
+
+        //you can safely change conn params here, like
+        /*
+        for i in 0..SIZE {
+            for j in i + 1..SIZE {
+                model.conn.update_both(i, j, 0.2, step%50);
+            }
+        }
+        */
+
+        // also you can send additional messages, if you want, like
+        // model.request_random();
+
         model.step().await;
     }
 
