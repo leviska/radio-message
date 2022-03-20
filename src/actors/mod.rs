@@ -1,3 +1,3 @@
-pub mod basic;
+pub mod gossip;
 
-pub use basic::*;
+pub use gossip::*;
