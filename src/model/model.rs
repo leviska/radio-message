@@ -48,6 +48,7 @@ impl<T: Clone + core::fmt::Debug> Model<T> {
                 recv,
                 done: done.0.clone(),
                 tick: ticks.subscribe(),
+                step: 0,
                 id: id as u32,
             });
         }
@@ -171,6 +172,7 @@ pub struct Context<T> {
     recv: mpsc::UnboundedReceiver<Message<T>>,
     tick: watch::Receiver<u32>,
     done: mpsc::Sender<()>,
+    step: u32,
     id: u32,
 }
 
@@ -219,6 +221,11 @@ impl<T> Context<T> {
     pub async fn next_step(&mut self) -> Result<u32, ()> {
         let _ = self.done.send(()).await;
         self.tick.changed().await.map_err(|_| ())?;
-        Ok(*self.tick.borrow())
+        self.step = *self.tick.borrow();
+        Ok(self.step)
+    }
+
+    pub fn current_step(&self) -> u32 {
+        return self.step;
     }
 }

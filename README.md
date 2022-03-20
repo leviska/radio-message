@@ -20,6 +20,9 @@ Then, add `--target x86_64-pc-windows-gnu` to every cargo command, like `cargo b
 ## Commands
 
 ```bash
+# Add RUST_LOG=(debug|info|error) for log output
+# Run tests with full output
+RUST_LOG=debug cargo test -- --nocapture
 # Just run (even in wsl)
 cargo run --bin console
 cargo run --release --bin visual  # --release for release build
