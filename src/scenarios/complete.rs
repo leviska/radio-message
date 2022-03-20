@@ -21,7 +21,7 @@ fn send_batch<T: Clone + core::fmt::Debug>(model: &mut Model<T>, size: u32) {
 
 #[tokio::test]
 async fn gossip() {
-    env_logger::init();
+    let _ = env_logger::builder().try_init();
 
     const SIZE: u32 = 10;
 

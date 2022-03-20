@@ -3,7 +3,7 @@ use crate::model::*;
 
 #[tokio::test]
 async fn todo() {
-    env_logger::init();
+    let _ = env_logger::builder().try_init();
 
     // TODO:
 }
