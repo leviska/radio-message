@@ -68,6 +68,7 @@ impl ConnMap {
             DEVIATION as f32,
         )
         .unwrap();
+        // todo fix it
         return Some(std::cmp::max(MIN_DELAY, rand.sample(rng) as i32) as u32);
     }
 }
