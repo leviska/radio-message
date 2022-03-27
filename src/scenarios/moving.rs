@@ -1,8 +1,5 @@
-use std::borrow::Borrow;
-use macroquad::ui;
-use rand::distributions::Uniform;
 use rand::{thread_rng, Rng};
-use std::ops;
+use std::borrow::Borrow;
 use std::ops::Sub;
 
 use crate::actors::*;
@@ -30,10 +27,7 @@ struct Agent {
     velocity: f64, // Distance traversed by one person in 1 step
 }
 
-
-fn init_simple<T: Clone + core::fmt::Debug>(
-    size: u32,
-) -> (Model<T>, Vec<Context<T>>) {
+fn init_simple<T: Clone + core::fmt::Debug>(size: u32) -> (Model<T>, Vec<Context<T>>) {
     let (mut model, contexts) = Model::<T>::new(size);
     for i in 0..size {
         for j in i + 1..size {
@@ -53,7 +47,6 @@ fn send_batch<T: Clone + core::fmt::Debug>(model: &mut Model<T>, size: u32) {
 async fn gossip() {
     let _ = env_logger::builder().try_init();
 
-
     let mut actors: Vec<Agent> = Vec::new();
 
     let mut rng = thread_rng();
@@ -62,14 +55,8 @@ async fn gossip() {
 
     for _ in 0..ACTORS_COUNT {
         actors.push(Agent {
-            position: point2(
-                rng.sample(field_random),
-                rng.sample(field_random),
-            ),
-            destination: point2(
-                rng.sample(field_random),
-                rng.sample(field_random),
-            ),
+            position: point2(rng.sample(field_random), rng.sample(field_random)),
+            destination: point2(rng.sample(field_random), rng.sample(field_random)),
             velocity: rng.sample(speed_random),
         });
     }
@@ -95,22 +82,19 @@ async fn gossip() {
             let mut steps_remaining = 1.0;
             loop {
                 let remaining_dist = actor.destination.distance_to(actor.position);
-                if remaining_dist > (steps_remaining * actor.velocity) {
+                if remaining_dist > steps_remaining * actor.velocity {
                     // Nothing changes;
 
                     let mut direction = actor.destination.sub(actor.position);
                     direction = direction / direction.length() * steps_remaining * actor.velocity;
-                    (*actor).position += direction;
+                    actor.position += direction;
 
                     break;
                 } else {
                     steps_remaining -= remaining_dist / actor.velocity.borrow();
-                    (*actor).position = actor.destination;
-                    (*actor).destination = point2(
-                        rng.sample(field_random),
-                        rng.sample(field_random),
-                    );
-                    (*actor).velocity = rng.sample(speed_random);
+                    actor.position = actor.destination;
+                    actor.destination = point2(rng.sample(field_random), rng.sample(field_random));
+                    actor.velocity = rng.sample(speed_random);
 
                     log::info!("Achieved {}", id);
                 }
@@ -119,12 +103,15 @@ async fn gossip() {
 
         for i in 0..ACTORS_COUNT as u32 {
             for j in i + 1..ACTORS_COUNT as u32 {
-                let dst = actors[i as usize].position.distance_to(actors[j as usize].position);
+                let dst = actors[i as usize]
+                    .position
+                    .distance_to(actors[j as usize].position);
                 let dst_frac = dst / (2.0 * FIELD_SIZE).sqrt();
-                model.conn.update_both(i, j, (1. - dst_frac) as f32, (dst_frac * BASE_DELAY) as i32);
+                let prob = (1. - dst_frac) as f32;
+                let delay = (dst_frac * BASE_DELAY) as i32;
+                model.conn.update_both(i, j, prob, delay);
             }
         }
-
 
         // also you can send additional messages, if you want, like
         // model.request_random();
