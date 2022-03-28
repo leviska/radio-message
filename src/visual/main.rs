@@ -1,4 +1,4 @@
-#[path = "../model/mod.rs"]
+#[path = "../model/protocols"]
 mod model;
 
 use macroquad::prelude::*;

@@ -1,3 +1,5 @@
+extern crate core;
+
 #[path = "../mod.rs"]
 pub mod main;
 

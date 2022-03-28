@@ -1,5 +1,8 @@
-use crate::actors::*;
+use crate::protocols::*;
 use crate::model::*;
+use crate::scenarios::*;
+
+
 
 const STEPS: i32 = 10000;
 
@@ -13,11 +16,6 @@ fn init_simple<T: Clone + core::fmt::Debug>(size: u32) -> (Model<T>, Vec<Context
     (model, contexts)
 }
 
-fn send_batch<T: Clone + core::fmt::Debug>(model: &mut Model<T>, size: u32) {
-    for _ in 0..size {
-        model.request_random();
-    }
-}
 
 #[tokio::test]
 async fn gossip() {
@@ -26,7 +24,7 @@ async fn gossip() {
     const SIZE: u32 = 10;
 
     let (mut model, contexts) = init_simple::<GossipMessage>(SIZE);
-    send_batch(&mut model, SIZE);
+    send_batch::<GossipMessage>(&mut model, SIZE);
 
     for (id, ctx) in contexts.into_iter().enumerate() {
         tokio::spawn(async move {
