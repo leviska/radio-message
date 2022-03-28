@@ -8,22 +8,25 @@ use crate::scenarios::*;
 use crate::model::*;
 
 use euclid::*;
+use rand_distr::num_traits::ToPrimitive;
 
-const DEFAULT_STEPS_COUNT: i32 = 1000 * 60 * 10; /* 10 minutes */
-const DEFAULT_FIELD_SIZE: f64 = 100.0; /* 100 meters */
-const DEFAULT_MIN_VELOCITY: f64 = 0.001 / 2.0; /* 0.5 m/sec*/
-const DEFAULT_MAX_VELOCITY: f64 = 0.001 * 2.0; /* 2.0 m/sec*/
-const DEFAULT_BASE_DELAY: f64 = 100.;
+const DEFAULT_STEPS_COUNT: u32 = 1000 * 60 * 10; /* 10 minutes */
 const DEFAULT_AGENTS_COUNT: u32 = 10;
+const DEFAULT_FIELD_SIZE: f64 = 100.0; /* 100 meters */
+const DEFAULT_MIN_VELOCITY: f64 = 0.001 * 9.0; /* 0.5 m/sec */
+const DEFAULT_MAX_VELOCITY: f64 = 0.001 * 10.0; /* 2.0 m/sec */
+const DEFAULT_BASE_DELAY: f64 = 100.;
+const DEFAULT_MAX_CONNECTION_RANGE: f64 = 30.; /* 30 m */
 
 
 struct MovingModelParams {
-    steps_count: i32,
+    steps_count: u32,
+    agents_count: u32,
     field_size: f64,
     min_velocity: f64,
     max_velocity: f64,
     base_delay: f64,
-    agents_count: u32,
+    max_connection_range: f64,
 }
 
 
@@ -38,9 +41,10 @@ fn update_connections_via_positions<T: Clone + core::fmt::Debug>(model: &mut Mod
     for (i, a1) in agents.iter().enumerate() {
         for (j, a2) in agents.iter().enumerate() {
             let dst = (a1.position).distance_to(a2.position);
-            let dst_frac = dst / ((2.0 * params.field_size.powf(2.)).sqrt());
-            model.conn.update_both(i as u32, j as u32, (1. - dst_frac) as f32,
-                                   (dst_frac * params.base_delay).ceil() as i32);
+            // let dst_frac = dst / ((2.0 * params.field_size.powf(2.)).sqrt());
+            let delay = 0;
+            let prob = if dst > params.max_connection_range { 0. } else { 1. };
+            model.conn.update_both(i as u32, j as u32, prob.to_f32().unwrap(), delay);
         }
     }
 }
@@ -132,12 +136,13 @@ async fn test_moving() {
     let _ = env_logger::builder().try_init();
 
     let params = MovingModelParams {
-        agents_count: get_parse_or("AGENTS_COUNT", DEFAULT_AGENTS_COUNT).unwrap(),
         steps_count: get_parse_or("STEPS_COUNT", DEFAULT_STEPS_COUNT).unwrap(),
+        agents_count: get_parse_or("AGENTS_COUNT", DEFAULT_AGENTS_COUNT).unwrap(),
         field_size: get_parse_or("FIELD_SIZE", DEFAULT_FIELD_SIZE).unwrap(),
         min_velocity: get_parse_or("MIN_VELOCITY", DEFAULT_MIN_VELOCITY).unwrap(),
         max_velocity: get_parse_or("MAX_VELOCITY", DEFAULT_MAX_VELOCITY).unwrap(),
         base_delay: get_parse_or("BASE_DELAY", DEFAULT_BASE_DELAY).unwrap(),
+        max_connection_range: get_parse_or("MAX_CONNECTION_RANGE", DEFAULT_MAX_CONNECTION_RANGE).unwrap(),
     };
 
     {
