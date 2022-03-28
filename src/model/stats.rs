@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use rand_distr::num_traits::ToPrimitive;
 
 #[derive(Copy, Clone, Default, Debug)]
 pub struct MessageStat {
@@ -35,5 +36,17 @@ impl Stats {
 
     pub fn on_message(&mut self) {
         self.total += 1;
+    }
+
+    pub fn avg_delivery_time(&self) -> f64 {
+        let mut sum = 0.;
+        let mut count = 0.;
+        for (_, stat) in self.messages.iter() {
+            if stat.delivered {
+                count += 1.;
+                sum += stat.steps.to_f64().unwrap();
+            }
+        }
+        return sum / count;
     }
 }
