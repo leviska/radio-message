@@ -42,6 +42,9 @@ pub async fn gossip_actor(my_id: u32, mut ctx: Context<GossipMessage>) {
                             .map(|x| matches!(x.0, GossipMessage::Ack(_)))
                             .unwrap_or_default()
                         {
+                            history
+                                .entry(id)
+                                .or_insert((GossipMessage::Ack(id), ctx.current_step()));
                             ctx.send(MessageType::Comm(GossipMessage::Ack(id)));
                         }
                     }
