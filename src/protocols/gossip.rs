@@ -22,6 +22,10 @@ pub async fn gossip_actor(my_id: u32, mut ctx: Context<GossipMessage>) {
                         if m.to == my_id {
                             ctx.send(MessageType::Request(m));
                             history.entry(m.id).or_insert((GossipMessage::Ack(m.id), 0));
+                        } else {
+                            let gm = GossipMessage::Request(m);
+                            ctx.send(MessageType::Comm(gm.clone()));
+                            history.entry(m.id).or_insert((GossipMessage::Request(m), 0));
                         }
                         // if history[id] == Ack
                         if history
