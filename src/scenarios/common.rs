@@ -1,3 +1,5 @@
+use rand::Rng;
+
 use crate::model::*;
 use crate::protocols::*;
 
@@ -21,7 +23,7 @@ pub fn generate_dsdv_model<R>(size: u32, rng: R) -> Model<DSDVMessage, R> {
     return model;
 }
 
-pub fn send_batch<T: Clone + core::fmt::Debug, R>(model: &mut Model<T, R>, count: u32) {
+pub fn send_batch<T: Clone + core::fmt::Debug, R: Rng>(model: &mut Model<T, R>, count: u32) {
     for _ in 0..count {
         model.request_random();
     }
