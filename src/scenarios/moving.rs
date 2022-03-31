@@ -12,21 +12,24 @@ use rand_distr::num_traits::ToPrimitive;
 
 const DEFAULT_STEPS_COUNT: u32 = 1000 * 60 * 10; /* 10 minutes */
 const DEFAULT_AGENTS_COUNT: u32 = 10;
+const DEFAULT_MESSAGES_COUNT: u32 = 10;
 const DEFAULT_FIELD_SIZE: f64 = 100.0; /* 100 meters */
 const DEFAULT_MIN_VELOCITY: f64 = 0.001 / 2.0; /* 0.5 m/sec */
 const DEFAULT_MAX_VELOCITY: f64 = 0.001 * 2.0; /* 2.0 m/sec */
 const DEFAULT_BASE_DELAY: f64 = 100.;
 const DEFAULT_MAX_CONNECTION_RANGE: f64 = 30.; /* 30 m */
-
+const DEFAULT_STARTUP_AWAIT: u32 = 5 * 1000; /* 5 seconds for a startup */
 
 struct MovingModelParams {
     steps_count: u32,
     agents_count: u32,
+    messages_count: u32,
     field_size: f64,
     min_velocity: f64,
     max_velocity: f64,
     base_delay: f64,
     max_connection_range: f64,
+    startup_await: u32,
 }
 
 
@@ -78,11 +81,15 @@ async fn test_moving_random<T: Clone + core::fmt::Debug>(model: &mut Model<T>, a
 
     update_connections_via_positions(model, &agents, &params);
 
-    send_batch(model, agents_count);
 
+    for _ in 0..params.startup_await {
+        model.step().await;
+    }
+
+    send_batch(model, params.messages_count);
 
     // basically works like a timeout
-    for _ in 0..params.steps_count {
+    for _ in params.startup_await..params.steps_count {
         // if all messages that were requested are delivered, break
         if model.stats.all_delivered() {
             break;
@@ -139,11 +146,13 @@ async fn test_moving() {
     let params = MovingModelParams {
         steps_count: get_parse_or("STEPS_COUNT", DEFAULT_STEPS_COUNT).unwrap(),
         agents_count: get_parse_or("AGENTS_COUNT", DEFAULT_AGENTS_COUNT).unwrap(),
+        messages_count: get_parse_or("MESSAGES_COUNT", DEFAULT_MESSAGES_COUNT).unwrap(),
         field_size: get_parse_or("FIELD_SIZE", DEFAULT_FIELD_SIZE).unwrap(),
         min_velocity: get_parse_or("MIN_VELOCITY", DEFAULT_MIN_VELOCITY).unwrap(),
         max_velocity: get_parse_or("MAX_VELOCITY", DEFAULT_MAX_VELOCITY).unwrap(),
         base_delay: get_parse_or("BASE_DELAY", DEFAULT_BASE_DELAY).unwrap(),
         max_connection_range: get_parse_or("MAX_CONNECTION_RANGE", DEFAULT_MAX_CONNECTION_RANGE).unwrap(),
+        startup_await: get_parse_or("STARTUP_AWAIT", DEFAULT_STARTUP_AWAIT).unwrap(),
     };
 
     {
