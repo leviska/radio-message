@@ -1,17 +1,17 @@
 use super::*;
-use rand::prelude::SliceRandom;
+use rand::{prelude::SliceRandom, RngCore};
 use rand_distr::{Distribution, Uniform};
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Debug};
 use tokio::sync::{mpsc, watch};
 
-pub struct Model<T> {
+pub struct Model<T, R> {
     size: u32,
     step: u32,
     send: mpsc::UnboundedReceiver<(u32, MessageType<T>)>,
     recv: Vec<mpsc::UnboundedSender<Message<T>>>,
     buffer: HashMap<u32, Vec<Message<T>>>,
     done: mpsc::Receiver<()>,
-    rng: rand::rngs::ThreadRng,
+    pub rng: R,
     pub conn: ConnMap,
     ticks: watch::Sender<u32>,
     messages: u32,
@@ -34,9 +34,8 @@ fn vec_chan<T>(
     (txs, rxs)
 }
 
-impl<T: Clone + core::fmt::Debug> Model<T> {
-    pub fn new(size: u32) -> (Model<T>, Vec<Context<T>>) {
-        let rng = rand::thread_rng();
+impl<T, R> Model<T, R> {
+    pub fn new(size: u32, rng: R) -> (Model<T, R>, Vec<Context<T>>) {
         let recv = vec_chan(size as usize);
         let send = mpsc::unbounded_channel();
         let ticks = watch::channel(0).0;
@@ -67,7 +66,9 @@ impl<T: Clone + core::fmt::Debug> Model<T> {
         };
         (model, contexts)
     }
+}
 
+impl<T: Clone + Debug, R: RngCore> Model<T, R> {
     fn send_message(&mut self, from: u32, to: u32, data: &T) {
         if let Some(delay) = self.conn.get(from, to, &mut self.rng) {
             let at = self.step + delay;
@@ -146,7 +147,7 @@ impl<T: Clone + core::fmt::Debug> Model<T> {
                     from,
                     to,
                     start: self.step,
-                    id: id,
+                    id,
                 }),
                 from,
                 to,

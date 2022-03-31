@@ -1,14 +1,8 @@
-use crate::protocols::*;
 use crate::model::*;
+use crate::protocols::*;
 
-
-fn init_simple<T: Clone + core::fmt::Debug>(size: u32) -> (Model<T>, Vec<Context<T>>) {
-    let (model, contexts) = Model::<T>::new(size);
-    (model, contexts)
-}
-
-pub fn generate_gossip_model(size: u32) -> Model<GossipMessage> {
-    let (model, contexts) = init_simple::<GossipMessage>(size);
+pub fn generate_gossip_model<R>(size: u32, rng: R) -> Model<GossipMessage, R> {
+    let (model, contexts) = Model::new(size, rng);
     for (id, ctx) in contexts.into_iter().enumerate() {
         tokio::spawn(async move {
             gossip_actor(id as u32, ctx).await;
@@ -17,8 +11,8 @@ pub fn generate_gossip_model(size: u32) -> Model<GossipMessage> {
     return model;
 }
 
-pub fn generate_dsdv_model(size: u32) -> Model<DSDVMessage> {
-    let (model, contexts) = init_simple::<DSDVMessage>(size);
+pub fn generate_dsdv_model<R>(size: u32, rng: R) -> Model<DSDVMessage, R> {
+    let (model, contexts) = Model::new(size, rng);
     for (id, ctx) in contexts.into_iter().enumerate() {
         tokio::spawn(async move {
             dsdv_actor(id as u32, ctx).await;
@@ -27,7 +21,7 @@ pub fn generate_dsdv_model(size: u32) -> Model<DSDVMessage> {
     return model;
 }
 
-pub fn send_batch<T: Clone + core::fmt::Debug>(model: &mut Model<T>, count: u32) {
+pub fn send_batch<T: Clone + core::fmt::Debug, R>(model: &mut Model<T, R>, count: u32) {
     for _ in 0..count {
         model.request_random();
     }
