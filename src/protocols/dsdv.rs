@@ -127,11 +127,9 @@ pub async fn dsdv_actor(my_id: u32, mut ctx: Context<DSDVMessage>) {
         assert!(unsent_messages.is_empty());
         log::info!("Umq: {}", messages_to_send.len());
         if ctx.current_step() - last_transmission >= DSDV_HEARTBEAT_PERIOD {
-            for (_, mut v) in table.iter_mut() {
-                v.sequence_number = ctx.current_step();
-            }
-            ctx.send(MessageType::Comm(DSDVMessage::HeartBeat((table.clone(), my_id))));
             last_transmission = ctx.current_step();
+            table.insert(my_id, RoutingEntry { metric: 0, next_hop: my_id, sequence_number: last_transmission });
+            ctx.send(MessageType::Comm(DSDVMessage::HeartBeat((table.clone(), my_id))));
         }
     }
     log::info!("worker {} stopped", my_id);
