@@ -146,11 +146,11 @@ async fn test_moving() {
         max_connection_range: get_parse_or("MAX_CONNECTION_RANGE", DEFAULT_MAX_CONNECTION_RANGE).unwrap(),
     };
 
-    // {
-    //     let mut model = generate_gossip_model(params.agents_count);
-    //     let stats = test_moving_random::<GossipMessage>(&mut model, params.agents_count, &params).await;
-    //     println!("Gossip protocol: delivered {}. Avg time: {}", stats.delivered, stats.avg_delivery_time());
-    // }
+    {
+        let mut model = generate_gossip_model(params.agents_count);
+        let stats = test_moving_random::<GossipMessage>(&mut model, params.agents_count, &params).await;
+        println!("Gossip protocol: delivered {}. Avg time: {}", stats.delivered, stats.avg_delivery_time());
+    }
     {
         let mut model = generate_dsdv_model(params.agents_count);
         let stats = test_moving_random::<DSDVMessage>(&mut model, params.agents_count, &params).await;
