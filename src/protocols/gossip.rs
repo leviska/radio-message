@@ -1,6 +1,8 @@
 use crate::model::*;
 use std::collections::HashMap;
 
+const GOSSIP_TIMEOUT: u32 = 100;
+
 #[derive(Debug, Clone)]
 pub enum GossipMessage {
     Request(RequestMessage),
@@ -57,7 +59,7 @@ pub async fn gossip_actor(my_id: u32, mut ctx: Context<GossipMessage>) {
             None => {}
         }
         for (_, m) in history.iter_mut() {
-            if matches!(m.0, GossipMessage::Request(_)) && ctx.current_step() - m.1 > 100 {
+            if matches!(m.0, GossipMessage::Request(_)) && ctx.current_step() - m.1 > GOSSIP_TIMEOUT {
                 ctx.send(MessageType::Comm(m.0.clone()));
                 m.1 = ctx.current_step();
             }

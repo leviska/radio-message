@@ -17,8 +17,8 @@ pub fn generate_gossip_model(size: u32) -> Model<GossipMessage> {
     return model;
 }
 
-pub fn generate_dsdv_model(size: u32) -> Model<DsdvMessage> {
-    let (model, contexts) = init_simple::<DsdvMessage>(size);
+pub fn generate_dsdv_model(size: u32) -> Model<DSDVMessage> {
+    let (model, contexts) = init_simple::<DSDVMessage>(size);
     for (id, ctx) in contexts.into_iter().enumerate() {
         tokio::spawn(async move {
             dsdv_actor(id as u32, ctx).await;
