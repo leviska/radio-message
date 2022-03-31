@@ -9,7 +9,7 @@ pub struct RoutingEntry {
     metric: u64,
 }
 
-const DSDV_HEARTBEAT_PERIOD: u32 = 100;
+const DSDV_HEARTBEAT_PERIOD: u32 = 500;
 const DSDV_RETRY_PERIOD: u32 = 1 * 1000; /* 1 second */
 type RoutingTable = HashMap<u32, RoutingEntry>;
 
@@ -39,7 +39,6 @@ pub async fn dsdv_actor(my_id: u32, mut ctx: Context<DSDVMessage>) {
     let mut messages_to_send = Vec::<(RoutableMessage, u32 /* destination */)>::new();
     let mut retries = HashMap::<u32, (RequestMessage, i32 /* last_sent */)>::new();
 
-    let mut table_changed = false;
 
     while let Ok(event) = ctx.read_for(10).await {
         match event {
@@ -84,7 +83,6 @@ pub async fn dsdv_actor(my_id: u32, mut ctx: Context<DSDVMessage>) {
                                 new_entry.next_hop = from;
                                 new_entry.metric = entry.metric + 1;
                                 table.insert(dst.clone(), new_entry);
-                                table_changed = true;
                             }
                         }
                     }
@@ -128,13 +126,12 @@ pub async fn dsdv_actor(my_id: u32, mut ctx: Context<DSDVMessage>) {
         messages_to_send.append(&mut unsent_messages);
         assert!(unsent_messages.is_empty());
         log::info!("Umq: {}", messages_to_send.len());
-        if ctx.current_step() - last_transmission >= DSDV_HEARTBEAT_PERIOD && table_changed {
+        if ctx.current_step() - last_transmission >= DSDV_HEARTBEAT_PERIOD {
             for (_, mut v) in table.iter_mut() {
                 v.sequence_number = ctx.current_step();
             }
             ctx.send(MessageType::Comm(DSDVMessage::HeartBeat((table.clone(), my_id))));
             last_transmission = ctx.current_step();
-            table_changed = false;
         }
     }
     log::info!("worker {} stopped", my_id);
