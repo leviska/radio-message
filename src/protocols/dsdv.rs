@@ -39,6 +39,8 @@ pub async fn dsdv_actor(my_id: u32, mut ctx: Context<DSDVMessage>) {
     let mut messages_to_send = Vec::<(RoutableMessage, u32 /* destination */)>::new();
     let mut retries = HashMap::<u32, (RequestMessage, i32 /* last_sent */)>::new();
 
+    let mut table_changed = false;
+
     while let Ok(event) = ctx.read_for(10).await {
         match event {
             Some(m) => match m.data {
@@ -74,7 +76,7 @@ pub async fn dsdv_actor(my_id: u32, mut ctx: Context<DSDVMessage>) {
                                 if env::var("DSDV_SHORTEST_PATH").is_ok() {
                                     shall_update_entry |= table.get(dst).unwrap().metric > entry.metric + 1;
                                 } else {
-                                    shall_update_entry |= table.get(dst).unwrap().next_hop < entry.next_hop;
+                                    shall_update_entry |= table.get(dst).unwrap().sequence_number < entry.sequence_number;
                                 }
                             }
                             if shall_update_entry {
@@ -82,6 +84,7 @@ pub async fn dsdv_actor(my_id: u32, mut ctx: Context<DSDVMessage>) {
                                 new_entry.next_hop = from;
                                 new_entry.metric = entry.metric + 1;
                                 table.insert(dst.clone(), new_entry);
+                                table_changed = true;
                             }
                         }
                     }
@@ -125,12 +128,13 @@ pub async fn dsdv_actor(my_id: u32, mut ctx: Context<DSDVMessage>) {
         messages_to_send.append(&mut unsent_messages);
         assert!(unsent_messages.is_empty());
         log::info!("Umq: {}", messages_to_send.len());
-        if ctx.current_step() - last_transmission >= DSDV_HEARTBEAT_PERIOD {
+        if ctx.current_step() - last_transmission >= DSDV_HEARTBEAT_PERIOD && table_changed {
             for (_, mut v) in table.iter_mut() {
                 v.sequence_number = ctx.current_step();
             }
             ctx.send(MessageType::Comm(DSDVMessage::HeartBeat((table.clone(), my_id))));
             last_transmission = ctx.current_step();
+            table_changed = false;
         }
     }
     log::info!("worker {} stopped", my_id);
