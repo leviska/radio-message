@@ -75,7 +75,8 @@ pub async fn dsdv_actor(my_id: u32, mut ctx: Context<DSDVMessage>) {
                                 if env::var("DSDV_SHORTEST_PATH").is_ok() {
                                     shall_update_entry |= table.get(dst).unwrap().metric > entry.metric + 1;
                                 } else {
-                                    shall_update_entry |= table.get(dst).unwrap().sequence_number < entry.sequence_number;
+                                    shall_update_entry |= table.get(dst).unwrap().sequence_number < entry.sequence_number ||
+                                        (table.get(dst).unwrap().sequence_number == entry.sequence_number && table.get(dst).unwrap().metric > entry.metric + 1);
                                 }
                             }
                             if shall_update_entry {
