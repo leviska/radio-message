@@ -23,9 +23,11 @@ pub async fn gossip_actor(my_id: u32, mut ctx: Context<GossipMessage>) {
                     GossipMessage::Request(m) => {
                         if m.to == my_id {
                             ctx.send(MessageType::Request(m));
-                            history.entry(m.id).or_insert((GossipMessage::Ack(m.id), 0));
+                            history.insert(m.id, (GossipMessage::Ack(m.id), 0));
                         } else {
-                            history.entry(m.id).or_insert((GossipMessage::Request(m), 0));
+                            history
+                                .entry(m.id)
+                                .or_insert((GossipMessage::Request(m), 0));
                         }
                         // if history[id] == Ack
                         if history
@@ -55,7 +57,8 @@ pub async fn gossip_actor(my_id: u32, mut ctx: Context<GossipMessage>) {
             None => {}
         }
         for (_, m) in history.iter_mut() {
-            if matches!(m.0, GossipMessage::Request(_)) && ctx.current_step() - m.1 > GOSSIP_TIMEOUT {
+            if matches!(m.0, GossipMessage::Request(_)) && ctx.current_step() - m.1 > GOSSIP_TIMEOUT
+            {
                 ctx.send(MessageType::Comm(m.0.clone()));
                 m.1 = ctx.current_step();
             }
