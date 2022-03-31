@@ -70,7 +70,7 @@ pub async fn dsdv_actor(my_id: u32, mut ctx: Context<DSDVMessage>) {
                     DSDVMessage::HeartBeat((other_table, from)) => {
                         for (dst, entry) in other_table.iter() {
                             let mut shall_update_entry = !table.contains_key(dst);
-                            if (!shall_update_entry) {
+                            if !shall_update_entry {
                                 if env::var("DSDV_SHORTEST_PATH").is_ok() {
                                     shall_update_entry |= table.get(dst).unwrap().metric > entry.metric + 1;
                                 } else {
@@ -98,7 +98,7 @@ pub async fn dsdv_actor(my_id: u32, mut ctx: Context<DSDVMessage>) {
 
 
         // Deduplicate messages
-        messages_to_send.sort_by_key(|(rm, dst)| match rm {
+        messages_to_send.sort_by_key(|(rm, _)| match rm {
             RoutableMessage::Request(rm) => rm.id,
             RoutableMessage::Ack(id) => *id
         });
@@ -126,7 +126,7 @@ pub async fn dsdv_actor(my_id: u32, mut ctx: Context<DSDVMessage>) {
         assert!(unsent_messages.is_empty());
         log::info!("Umq: {}", messages_to_send.len());
         if ctx.current_step() - last_transmission >= DSDV_HEARTBEAT_PERIOD {
-            for (k, mut v) in table.iter_mut() {
+            for (_, mut v) in table.iter_mut() {
                 v.sequence_number = ctx.current_step();
             }
             ctx.send(MessageType::Comm(DSDVMessage::HeartBeat((table.clone(), my_id))));

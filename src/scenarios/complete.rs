@@ -1,13 +1,16 @@
-use crate::protocols::*;
+use rand::thread_rng;
+
 use crate::model::*;
+use crate::protocols::*;
 use crate::scenarios::*;
-
-
 
 const STEPS: i32 = 10000;
 
-fn init_simple<T: Clone + core::fmt::Debug>(size: u32) -> (Model<T>, Vec<Context<T>>) {
-    let (mut model, contexts) = Model::<T>::new(size);
+fn init_simple<T: Clone + core::fmt::Debug, R>(
+    size: u32,
+    rng: R,
+) -> (Model<T, R>, Vec<Context<T>>) {
+    let (mut model, contexts) = Model::new(size, rng);
     for i in 0..size {
         for j in i + 1..size {
             model.conn.update_both(i, j, 0.1, 0);
@@ -16,15 +19,14 @@ fn init_simple<T: Clone + core::fmt::Debug>(size: u32) -> (Model<T>, Vec<Context
     (model, contexts)
 }
 
-
 #[tokio::test]
 async fn gossip() {
     let _ = env_logger::builder().try_init();
 
     const SIZE: u32 = 10;
 
-    let (mut model, contexts) = init_simple::<GossipMessage>(SIZE);
-    send_batch::<GossipMessage>(&mut model, SIZE);
+    let (mut model, contexts) = init_simple(SIZE, thread_rng());
+    send_batch(&mut model, SIZE);
 
     for (id, ctx) in contexts.into_iter().enumerate() {
         tokio::spawn(async move {
