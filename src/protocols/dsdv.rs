@@ -1,5 +1,6 @@
 use crate::model::*;
 use std::collections::HashMap;
+use std::env;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RoutingEntry {
@@ -68,7 +69,15 @@ pub async fn dsdv_actor(my_id: u32, mut ctx: Context<DSDVMessage>) {
                     }
                     DSDVMessage::HeartBeat((other_table, from)) => {
                         for (dst, entry) in other_table.iter() {
-                            if !table.contains_key(dst) || table.contains_key(dst) && table.get(dst).unwrap().sequence_number < entry.sequence_number {
+                            let mut shall_update_entry = !table.contains_key(dst);
+                            if (!shall_update_entry) {
+                                if env::var("DSDV_SHORTEST_PATH").is_ok() {
+                                    shall_update_entry |= table.get(dst).unwrap().metric > entry.metric + 1;
+                                } else {
+                                    shall_update_entry |= table.get(dst).unwrap().next_hop < entry.next_hop;
+                                }
+                            }
+                            if shall_update_entry {
                                 let mut new_entry = entry.clone();
                                 new_entry.next_hop = from;
                                 new_entry.metric = entry.metric + 1;
