@@ -74,7 +74,7 @@ fn generate_agents(
 async fn test_moving_random<T: Clone + core::fmt::Debug, R: Rng>(
     model: &mut Model<T, R>,
     params: &MovingModelParams,
-) -> Stats {
+) -> (u32, u32, f64) {
     let field_random = rand_distr::Uniform::new(0.0, params.field_size);
     let speed_random = rand_distr::Uniform::new(params.min_velocity, params.max_velocity);
 
@@ -138,19 +138,12 @@ async fn test_moving_random<T: Clone + core::fmt::Debug, R: Rng>(
             }
         }
     }
-
-    log::info!("{:?}", model.stats);
-
-    println!(
-        "Name: {}\nTotal msgs: {}\nDelivered msgs: {}\nAvg time (ms): {}\nSeed: {:?}\n",
-        std::any::type_name::<T>(),
+    log::info!("{} {:?}", std::any::type_name::<T>(), model.stats);
+    (
         model.stats.total,
         model.stats.delivered,
         model.stats.avg_delivery_time(),
-        params.seed,
-    );
-
-    return model.stats.clone();
+    )
 }
 
 #[tokio::test]
@@ -169,21 +162,30 @@ async fn test_moving() {
         startup_await: get_parse_or("STARTUP_AWAIT", DEFAULT_STARTUP_AWAIT).unwrap(),
         seed: envmnt::get_parse("SEED").ok(),
     };
-    println!("params: {:?}", params);
+    log::info!("{:?}", params);
 
     let get_rng = || match params.seed {
         Some(seed) => StdRng::seed_from_u64(seed),
         None => StdRng::from_entropy(),
     };
 
-    test_moving_random(
-        &mut generate_gossip_model(params.agents_count, get_rng()),
-        &params,
-    )
-    .await;
-    test_moving_random(
-        &mut generate_dsdv_model(params.agents_count, get_rng()),
-        &params,
-    )
-    .await;
+    let measurements = get_parse_or("MEASUREMENTS", 100).unwrap();
+
+    for _ in 0..measurements {
+        let (a, b, c) = test_moving_random(
+            &mut generate_gossip_model(params.agents_count, get_rng()),
+            &params,
+        )
+        .await;
+        println!("{} {} {}", a, b, c);
+    }
+    println!("===");
+    for _ in 0..measurements {
+        let (a, b, c) = test_moving_random(
+            &mut generate_dsdv_model(params.agents_count, get_rng()),
+            &params,
+        )
+        .await;
+        println!("{} {} {}", a, b, c);
+    }
 }
