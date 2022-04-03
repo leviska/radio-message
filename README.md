@@ -1,3 +1,9 @@
+# What is it
+
+This is a simulation of two different algorithms for delivering messages in sparse network, where agents can only broadcast messages to their neighbours.
+
+One algorithm is a slightly modified Gossip, and the other is Destination-Sequenced Distance Vector routing.
+
 # Run
 
 [Install rust](https://www.rust-lang.org/tools/install)
